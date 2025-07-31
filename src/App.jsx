@@ -50,18 +50,58 @@ class ChessGame {
     return this.board[row][col];
   }
 
+  isPathClear(fromRow, fromCol, toRow, toCol) {
+    const rowStep = Math.sign(toRow - fromRow);
+    const colStep = Math.sign(toCol - fromCol);
+
+    let currentRow = fromRow + rowStep;
+    let currentCol = fromCol + colStep;
+
+    while (currentRow !== toRow || currentCol !== toCol) {
+      if (this.board[currentRow][currentCol] != null) return false;
+      currentRow += rowStep;
+      currentCol += colStep;
+    }
+
+    return true;
+  }
+
+
   isValidMove(fromRow, fromCol, toRow, toCol) {
     const piece = this.board[fromRow][fromCol];
     if (!piece || piece.color !== this.currentPlayer) return false;
     if (toRow < 0 || toRow > 7 || toCol < 0 || toCol > 7) return false;
-    if (piece.type == 'pawn' && piece.color == 'black' && toRow - fromRow != 1 && toCol == fromCol) return false;
-    if (piece.type == 'pawn' && piece.color == 'white' && fromRow - toRow != 1 && toCol == fromCol) return false;
-
 
     const targetPiece = this.board[toRow][toCol];
     if (targetPiece && targetPiece.color === piece.color) return false;
 
-    return true; // Logica semplificata
+    if (piece.type == 'pawn') {
+      let direction = piece.color == 'white' ? -1 : 1;
+      let startRow = piece.color == 'white' ? 6 : 1;
+      if (toCol == fromCol && toRow - fromRow == direction && !targetPiece) return true;
+      if (toCol == fromCol && fromRow == startRow && toRow - fromRow == 2 * direction &&
+        this.board[toRow - direction][toCol] == null && !targetPiece) return true;
+      if (Math.abs(toCol - fromCol) == 1 && toRow - fromRow == direction && targetPiece) return true;
+    }
+    if (piece.type == 'rook') {
+      if (toCol == fromCol || fromRow == toRow && this.isPathClear(fromRow, fromCol, toRow, toCol)) return true;
+    }
+    if (piece.type == 'knight') {
+      if ((Math.abs(toCol - fromCol) == 2 && Math.abs(toRow - fromRow) == 1) ||
+        Math.abs(toCol - fromCol) == 1 && Math.abs(toRow - fromRow) == 2) return true;
+    }
+    if (piece.type == 'bishop') {
+      if ((Math.abs(toCol - fromCol) == Math.abs(toRow - fromRow)) && this.isPathClear(fromRow, fromCol, toRow, toCol)) return true;
+    }
+    if (piece.type == 'queen') {
+      if ((toCol == fromCol || fromRow == toRow) || Math.abs(toCol - fromCol) == Math.abs(toRow - fromRow)
+        && this.isPathClear(fromRow, fromCol, toRow, toCol)) return true;
+    }
+    if (piece.type == 'king') {
+      if (Math.abs(toCol - fromCol) <= 1 && Math.abs(toRow - fromRow) <= 1) return true;
+    }
+
+    return false;
   }
 
   makeMove(fromRow, fromCol, toRow, toCol) {
