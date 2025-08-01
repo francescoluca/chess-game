@@ -50,6 +50,37 @@ class ChessGame {
     return this.board[row][col];
   }
 
+  isKingInCheck(color) {
+    let kingRow = -1, kingCol = -1;
+
+    // Trova il re
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const piece = this.board[row][col];
+        if (piece && piece.type === 'king' && piece.color === color) {
+          kingRow = row;
+          kingCol = col;
+        }
+      }
+    }
+
+    // Controlla se qualche pezzo avversario può colpire il re
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const piece = this.board[row][col];
+        if (piece && piece.color !== color) {
+          if (this.isValidMove(row, col, kingRow, kingCol)) {
+            return { row: kingRow, col: kingCol }; // 🔴 Re sotto scacco
+          }
+        }
+      }
+    }
+
+    return null; // ✅ Nessuno scacco
+  }
+
+
+
   isPathClear(fromRow, fromCol, toRow, toCol) {
     const rowStep = Math.sign(toRow - fromRow);
     const colStep = Math.sign(toCol - fromCol);
@@ -69,7 +100,7 @@ class ChessGame {
 
   isValidMove(fromRow, fromCol, toRow, toCol) {
     const piece = this.board[fromRow][fromCol];
-    if (!piece || piece.color !== this.currentPlayer) return false;
+    if (!piece) return false;
     if (toRow < 0 || toRow > 7 || toCol < 0 || toCol > 7) return false;
 
     const targetPiece = this.board[toRow][toCol];
@@ -106,9 +137,22 @@ class ChessGame {
 
   makeMove(fromRow, fromCol, toRow, toCol) {
     if (!this.isValidMove(fromRow, fromCol, toRow, toCol)) return false;
-
-    this.board[toRow][toCol] = this.board[fromRow][fromCol];
+    // Simula la mossa
+    const piece = this.board[fromRow][fromCol];
+    if (piece.color != this.currentPlayer) return false;
+    const captured = this.board[toRow][toCol];
+    this.board[toRow][toCol] = piece;
     this.board[fromRow][fromCol] = null;
+
+    // Verifica se il re è in scacco dopo la mossa
+    const isCheck = this.isKingInCheck(piece.color);
+
+    // Se il re è in scacco, annulla la mossa
+    if (isCheck) {
+      this.board[fromRow][fromCol] = piece;
+      this.board[toRow][toCol] = captured;
+      return false;
+    }
     this.currentPlayer = this.currentPlayer === 'white' ? 'black' : 'white';
     return true;
   }
@@ -118,6 +162,7 @@ const ChessApp = () => {
   const [game, setGame] = useState(new ChessGame());
   const [selectedSquare, setSelectedSquare] = useState(null);
   const [moveHistory, setMoveHistory] = useState([]);
+  const [checkedKing, setCheckedKing] = useState(null);
 
   const getPieceSymbol = (piece) => {
     if (!piece) return '';
@@ -161,7 +206,12 @@ const ChessApp = () => {
         const moveNotation = `${String.fromCharCode(97 + fromCol)}${8 - fromRow} → ${String.fromCharCode(97 + col)}${8 - row}`;
         setMoveHistory(prev => [...prev, moveNotation]);
         setGame(newGame);
+
+        //Mostra posizione del re sotto scacco
+        const check = newGame.isKingInCheck(newGame.currentPlayer);
+        setCheckedKing(check);
       }
+
 
       setSelectedSquare(null);
     } else {
@@ -198,8 +248,9 @@ const ChessApp = () => {
                 Array(8).fill(null).map((_, col) => (
                   <div
                     key={`${row}-${col}`}
-                    className={`square ${isSquareDark(row, col) ? 'dark' : 'light'
-                      } ${isSquareSelected(row, col) ? 'selected' : ''}`}
+                    className={`square ${isSquareDark(row, col) ? 'dark' : 'light'} 
+                    ${isSquareSelected(row, col) ? 'selected' : ''} 
+                    ${checkedKing && checkedKing.row === row && checkedKing.col === col ? 'check' : ''}`}
                     onClick={() => handleSquareClick(row, col)}
                   >
                     <span className="piece">
