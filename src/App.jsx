@@ -220,6 +220,28 @@ const ChessApp = () => {
 
     return symbols[piece.color][piece.type] || '';
   };
+  function getAlgebraicNotation(piece, fromRow, fromCol, toRow, toCol, captured, check, checkmate) {
+
+    const fromFile = String.fromCharCode(97 + fromCol);
+    const toFile = String.fromCharCode(97 + toCol);
+    const toRank = 8 - toRow;
+
+    const isCapture = captured ? 'x' : '';
+    const checkSymbol = checkmate ? '#' : check ? '+' : '';
+
+    // Pedone con cattura: es "exd5"
+    if (piece.type === 'pawn') {
+      if (captured) {
+        return `${fromFile}x${toFile}${toRank}${checkSymbol}`;
+      } else {
+        return `${toFile}${toRank}${checkSymbol}`;
+      }
+    }
+
+    // Altri pezzi
+    return `${getPieceSymbol(piece)}${isCapture}${toFile}${toRank}${checkSymbol}`;
+  }
+
 
   const handleSquareClick = useCallback((row, col) => {
     if (gameOver) return;
@@ -236,11 +258,40 @@ const ChessApp = () => {
       newGame.currentPlayer = game.currentPlayer;
 
       if (newGame.makeMove(fromRow, fromCol, row, col)) {
-        const moveNotation = `${String.fromCharCode(97 + fromCol)}${8 - fromRow} → ${String.fromCharCode(97 + col)}${8 - row}`;
-        setMoveHistory(prev => [...prev, moveNotation]);
+        const movedPiece = game.getPieceAt(fromRow, fromCol);
+        const captured = game.getPieceAt(row, col);
+
+        // Crea una copia temporanea per verificare scacco e scacco matto
+        const tempGame = new ChessGame();
+        tempGame.board = game.board.map(r => r.map(cell => (cell ? { ...cell } : null)));
+        tempGame.board[row][col] = movedPiece;
+        tempGame.board[fromRow][fromCol] = null;
+
+        const check = tempGame.isKingInCheck(game.currentPlayer === 'white' ? 'black' : 'white');
+        const checkmate = tempGame.isCheckmate(game.currentPlayer === 'white' ? 'black' : 'white');
+
+        const moveNotation = getAlgebraicNotation(
+          movedPiece,
+          fromRow,
+          fromCol,
+          row,
+          col,
+          captured,
+          check,
+          checkmate
+        );
+        setMoveHistory(prev => {
+          const newHistory = [...prev];
+          if (game.currentPlayer === 'white') {
+            newHistory.push({ white: moveNotation, black: '' });
+          } else {
+            const lastMove = newHistory.pop();
+            newHistory.push({ ...lastMove, black: moveNotation });
+          }
+          return newHistory;
+        });
         setGame(newGame);
 
-        const check = newGame.isKingInCheck(newGame.currentPlayer);
         setCheckedKing(check);
 
         //Controllo scacco matto
@@ -347,7 +398,7 @@ const ChessApp = () => {
                 <div className="moves">
                   {moveHistory.map((move, index) => (
                     <div key={index} className="move">
-                      {index + 1}. {move}
+                      {index + 1}. {move.white || ''} {move.black || ''}
                     </div>
                   ))}
                 </div>
