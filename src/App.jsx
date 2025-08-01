@@ -79,7 +79,36 @@ class ChessGame {
     return null; // ✅ Nessuno scacco
   }
 
+  isCheckmate(color) {
+    if (!this.isKingInCheck(color)) return false;
 
+    for (let fromRow = 0; fromRow < 8; fromRow++) {
+      for (let fromCol = 0; fromCol < 8; fromCol++) {
+        const piece = this.board[fromRow][fromCol];
+        if (!piece || piece.color !== color) continue;
+
+        for (let toRow = 0; toRow < 8; toRow++) {
+          for (let toCol = 0; toCol < 8; toCol++) {
+            const copyGame = new ChessGame();
+            copyGame.board = this.board.map(row => row.map(cell => cell ? { ...cell } : null));
+            copyGame.currentPlayer = color;
+
+            if (copyGame.isValidMove(fromRow, fromCol, toRow, toCol)) {
+              // Prova la mossa
+              copyGame.board[toRow][toCol] = copyGame.board[fromRow][fromCol];
+              copyGame.board[fromRow][fromCol] = null;
+
+              if (!copyGame.isKingInCheck(color)) {
+                return false; // ha almeno una mossa per salvarsi
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return true; // nessuna mossa lo salva: è scacco matto
+  }
 
   isPathClear(fromRow, fromCol, toRow, toCol) {
     const rowStep = Math.sign(toRow - fromRow);
@@ -115,7 +144,7 @@ class ChessGame {
       if (Math.abs(toCol - fromCol) == 1 && toRow - fromRow == direction && targetPiece) return true;
     }
     if (piece.type == 'rook') {
-      if (toCol == fromCol || fromRow == toRow && this.isPathClear(fromRow, fromCol, toRow, toCol)) return true;
+      if ((toCol == fromCol || fromRow == toRow) && this.isPathClear(fromRow, fromCol, toRow, toCol)) return true;
     }
     if (piece.type == 'knight') {
       if ((Math.abs(toCol - fromCol) == 2 && Math.abs(toRow - fromRow) == 1) ||
@@ -125,7 +154,7 @@ class ChessGame {
       if ((Math.abs(toCol - fromCol) == Math.abs(toRow - fromRow)) && this.isPathClear(fromRow, fromCol, toRow, toCol)) return true;
     }
     if (piece.type == 'queen') {
-      if ((toCol == fromCol || fromRow == toRow) || Math.abs(toCol - fromCol) == Math.abs(toRow - fromRow)
+      if (((toCol == fromCol || fromRow == toRow) || Math.abs(toCol - fromCol) == Math.abs(toRow - fromRow))
         && this.isPathClear(fromRow, fromCol, toRow, toCol)) return true;
     }
     if (piece.type == 'king') {
@@ -163,6 +192,9 @@ const ChessApp = () => {
   const [selectedSquare, setSelectedSquare] = useState(null);
   const [moveHistory, setMoveHistory] = useState([]);
   const [checkedKing, setCheckedKing] = useState(null);
+  const [gameOver, setGameOver] = useState(false);
+  const [winner, setWinner] = useState(null); // 'white' | 'black'
+
 
   const getPieceSymbol = (piece) => {
     if (!piece) return '';
@@ -190,6 +222,7 @@ const ChessApp = () => {
   };
 
   const handleSquareClick = useCallback((row, col) => {
+    if (gameOver) return;
     if (selectedSquare) {
       const [fromRow, fromCol] = selectedSquare;
 
@@ -207,10 +240,16 @@ const ChessApp = () => {
         setMoveHistory(prev => [...prev, moveNotation]);
         setGame(newGame);
 
-        //Mostra posizione del re sotto scacco
         const check = newGame.isKingInCheck(newGame.currentPlayer);
         setCheckedKing(check);
+
+        //Controllo scacco matto
+        if (newGame.isCheckmate(newGame.currentPlayer)) {
+          setGameOver(true);
+          setWinner(game.currentPlayer); // Il giocatore precedente ha vinto
+        }
       }
+
 
 
       setSelectedSquare(null);
@@ -225,8 +264,12 @@ const ChessApp = () => {
   const resetGame = () => {
     setGame(new ChessGame());
     setSelectedSquare(null);
+    setCheckedKing(null);
     setMoveHistory([]);
+    setGameOver(false);
+    setWinner(null);
   };
+
 
   const isSquareSelected = (row, col) => {
     return selectedSquare && selectedSquare[0] === row && selectedSquare[1] === col;
@@ -240,8 +283,14 @@ const ChessApp = () => {
     <div className="app">
       <div className="game-container">
 
+
         {/* Scacchiera */}
         <div className="board-section">
+          {gameOver && (
+            <div className="game-over">
+              ♛ Scacco Matto! Vince il {winner === 'white' ? 'Bianco' : 'Nero'} ♚
+            </div>
+          )}
           <div className="board-wrapper">
             <div className="chessboard">
               {Array(8).fill(null).map((_, row) =>
