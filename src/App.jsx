@@ -8,6 +8,14 @@ class ChessGame {
     this.currentPlayer = 'white';
     this.selectedSquare = null;
     this.gameStatus = 'playing';
+    this.hasMoved = {
+      whiteKing: false,
+      blackKing: false,
+      whiteRookLeft: false,
+      whiteRookRight: false,
+      blackRookLeft: false,
+      blackRookRight: false,
+    };
   }
 
   initializeBoard() {
@@ -137,9 +145,9 @@ class ChessGame {
 
     if (piece.type == 'pawn') {
       let direction = piece.color == 'white' ? -1 : 1;
-      let startRow = piece.color == 'white' ? 6 : 1;
+      let pawnStartRow = piece.color == 'white' ? 6 : 1;
       if (toCol == fromCol && toRow - fromRow == direction && !targetPiece) return true;
-      if (toCol == fromCol && fromRow == startRow && toRow - fromRow == 2 * direction &&
+      if (toCol == fromCol && fromRow == pawnStartRow && toRow - fromRow == 2 * direction &&
         this.board[toRow - direction][toCol] == null && !targetPiece) return true;
       if (Math.abs(toCol - fromCol) == 1 && toRow - fromRow == direction && targetPiece) return true;
     }
@@ -159,6 +167,40 @@ class ChessGame {
     }
     if (piece.type == 'king') {
       if (Math.abs(toCol - fromCol) <= 1 && Math.abs(toRow - fromRow) <= 1) return true;
+      //arrocco
+      if (toRow == fromRow && Math.abs(toCol - fromCol) == 2) {
+        const isWhite = piece.color === 'white';
+        const row = isWhite ? 7 : 0;
+
+        const kingSide = toCol > fromCol;
+        const rookCol = kingSide ? 7 : 0;
+        const betweenCols = kingSide ? [5, 6] : [1, 2, 3];
+
+        // Controllo se re o torre si sono già mossi
+        const kingMoved = this.hasMoved[isWhite ? 'whiteKing' : 'blackKing'];
+        const rookMoved = this.hasMoved[isWhite
+          ? kingSide ? 'whiteRookRight' : 'whiteRookLeft'
+          : kingSide ? 'blackRookRight' : 'blackRookLeft'];
+
+        if (kingMoved || rookMoved) return false;
+
+        // Controlla se il percorso è libero
+        for (let col of betweenCols) {
+          if (this.board[row][col] !== null) return false;
+        }
+
+        // Controlla che il re non sia sotto scacco né attraversi caselle attaccate
+        const directions = kingSide ? [4, 5, 6] : [4, 3, 2];
+        for (let col of directions) {
+          const tempGame = new ChessGame();
+          tempGame.board = this.board.map(r => r.map(cell => (cell ? { ...cell } : null)));
+          tempGame.board[row][col] = { ...piece };
+          tempGame.board[fromRow][fromCol] = null;
+          if (tempGame.isKingInCheck(piece.color)) return false;
+        }
+
+        return true;
+      }
     }
 
     return false;
@@ -169,6 +211,33 @@ class ChessGame {
     // Simula la mossa
     const piece = this.board[fromRow][fromCol];
     if (piece.color != this.currentPlayer) return false;
+
+    const isCastling = piece.type === 'king' && Math.abs(toCol - fromCol) === 2;
+
+    if (isCastling) {
+      const isWhite = piece.color === 'white';
+      const row = isWhite ? 7 : 0;
+      const kingSide = toCol > fromCol;
+
+      // Sposta il re
+      this.board[toRow][toCol] = piece;
+      this.board[fromRow][fromCol] = null;
+
+      // Sposta la torre
+      const rookFromCol = kingSide ? 7 : 0;
+      const rookToCol = kingSide ? 5 : 3;
+      this.board[row][rookToCol] = this.board[row][rookFromCol];
+      this.board[row][rookFromCol] = null;
+
+      // Aggiorna hasMoved
+      this.hasMoved[isWhite ? 'whiteKing' : 'blackKing'] = true;
+      this.hasMoved[isWhite
+        ? kingSide ? 'whiteRookRight' : 'whiteRookLeft'
+        : kingSide ? 'blackRookRight' : 'blackRookLeft'] = true;
+
+      this.currentPlayer = isWhite ? 'black' : 'white';
+      return true;
+    }
     const captured = this.board[toRow][toCol];
     this.board[toRow][toCol] = piece;
     this.board[fromRow][fromCol] = null;
@@ -183,6 +252,15 @@ class ChessGame {
       return false;
     }
     this.currentPlayer = this.currentPlayer === 'white' ? 'black' : 'white';
+    if (piece.type === 'king') {
+      this.hasMoved[piece.color === 'white' ? 'whiteKing' : 'blackKing'] = true;
+    }
+    if (piece.type === 'rook') {
+      if (fromRow === 7 && fromCol === 0) this.hasMoved.whiteRookLeft = true;
+      if (fromRow === 7 && fromCol === 7) this.hasMoved.whiteRookRight = true;
+      if (fromRow === 0 && fromCol === 0) this.hasMoved.blackRookLeft = true;
+      if (fromRow === 0 && fromCol === 7) this.hasMoved.blackRookRight = true;
+    }
     return true;
   }
 }
@@ -220,8 +298,10 @@ const ChessApp = () => {
 
     return symbols[piece.color][piece.type] || '';
   };
-  function getAlgebraicNotation(piece, fromRow, fromCol, toRow, toCol, captured, check, checkmate) {
-
+  function getAlgebraicNotation(piece, fromRow, fromCol, toRow, toCol, captured, check, checkmate, isCastling) {
+    if (isCastling) {
+      return toCol === 6 ? 'O-O' : 'O-O-O';
+    }
     const fromFile = String.fromCharCode(97 + fromCol);
     const toFile = String.fromCharCode(97 + toCol);
     const toRank = 8 - toRow;
@@ -269,6 +349,7 @@ const ChessApp = () => {
 
         const check = tempGame.isKingInCheck(game.currentPlayer === 'white' ? 'black' : 'white');
         const checkmate = tempGame.isCheckmate(game.currentPlayer === 'white' ? 'black' : 'white');
+        const isCastling = movedPiece.type === 'king' && Math.abs(col - fromCol) === 2;
 
         const moveNotation = getAlgebraicNotation(
           movedPiece,
@@ -278,7 +359,8 @@ const ChessApp = () => {
           col,
           captured,
           check,
-          checkmate
+          checkmate,
+          isCastling
         );
         setMoveHistory(prev => {
           const newHistory = [...prev];
