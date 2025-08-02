@@ -8,6 +8,7 @@ class ChessGame {
     this.currentPlayer = 'white';
     this.selectedSquare = null;
     this.gameStatus = 'playing';
+    this.enPassantTarget = null;
     this.hasMoved = {
       whiteKing: false,
       blackKing: false,
@@ -100,6 +101,9 @@ class ChessGame {
             const copyGame = new ChessGame();
             copyGame.board = this.board.map(row => row.map(cell => cell ? { ...cell } : null));
             copyGame.currentPlayer = color;
+            copyGame.enPassantTarget = this.enPassantTarget
+              ? { ...this.enPassantTarget }
+              : null;
 
             if (copyGame.isValidMove(fromRow, fromCol, toRow, toCol)) {
               // Prova la mossa
@@ -134,7 +138,6 @@ class ChessGame {
     return true;
   }
 
-
   isValidMove(fromRow, fromCol, toRow, toCol) {
     const piece = this.board[fromRow][fromCol];
     if (!piece) return false;
@@ -146,11 +149,28 @@ class ChessGame {
     if (piece.type == 'pawn') {
       let direction = piece.color == 'white' ? -1 : 1;
       let pawnStartRow = piece.color == 'white' ? 6 : 1;
+
+      //mossa standard
       if (toCol == fromCol && toRow - fromRow == direction && !targetPiece) return true;
+
+      //mossa iniziale da 2
       if (toCol == fromCol && fromRow == pawnStartRow && toRow - fromRow == 2 * direction &&
         this.board[toRow - direction][toCol] == null && !targetPiece) return true;
+
+      //cattura in diagonale normale
       if (Math.abs(toCol - fromCol) == 1 && toRow - fromRow == direction && targetPiece) return true;
+
+      // EN PASSANT CORRETTO
+      if (Math.abs(toCol - fromCol) === 1 &&
+        toRow - fromRow === direction &&
+        !targetPiece &&
+        this.enPassantTarget &&
+        toRow === this.enPassantTarget.row &&
+        toCol === this.enPassantTarget.col) {
+        return true;
+      }
     }
+
     if (piece.type == 'rook') {
       if ((toCol == fromCol || fromRow == toRow) && this.isPathClear(fromRow, fromCol, toRow, toCol)) return true;
     }
@@ -196,6 +216,10 @@ class ChessGame {
           tempGame.board = this.board.map(r => r.map(cell => (cell ? { ...cell } : null)));
           tempGame.board[row][col] = { ...piece };
           tempGame.board[fromRow][fromCol] = null;
+          tempGame.enPassantTarget = this.enPassantTarget
+            ? { ...this.enPassantTarget }
+            : null;
+
           if (tempGame.isKingInCheck(piece.color)) return false;
         }
 
@@ -208,7 +232,7 @@ class ChessGame {
 
   makeMove(fromRow, fromCol, toRow, toCol) {
     if (!this.isValidMove(fromRow, fromCol, toRow, toCol)) return false;
-    // Simula la mossa
+
     const piece = this.board[fromRow][fromCol];
     if (piece.color != this.currentPlayer) return false;
 
@@ -236,11 +260,40 @@ class ChessGame {
         : kingSide ? 'blackRookRight' : 'blackRookLeft'] = true;
 
       this.currentPlayer = isWhite ? 'black' : 'white';
+      this.enPassantTarget = null; // Reset en passant dopo qualsiasi mossa
       return true;
     }
-    const captured = this.board[toRow][toCol];
+
+    // CONTROLLO EN PASSANT CORRETTO
+    const isEnPassant = piece.type === 'pawn' &&
+      Math.abs(toCol - fromCol) === 1 &&
+      this.board[toRow][toCol] === null &&
+      this.enPassantTarget &&
+      toRow === this.enPassantTarget.row &&
+      toCol === this.enPassantTarget.col;
+
+    // Salva il pezzo catturato prima di fare la mossa
+    let captured = null;
+    let capturedPawnRow = -1;
+    let capturedPawnCol = -1;
+
+    if (isEnPassant) {
+      // Per en passant, il pedone da catturare è sulla stessa riga del pedone che si muove
+      capturedPawnRow = fromRow;
+      capturedPawnCol = toCol;
+      captured = this.board[capturedPawnRow][capturedPawnCol];
+    } else {
+      captured = this.board[toRow][toCol];
+    }
+
+    // Esegui la mossa
     this.board[toRow][toCol] = piece;
     this.board[fromRow][fromCol] = null;
+
+    // Se è en passant, rimuovi il pedone catturato
+    if (isEnPassant) {
+      this.board[capturedPawnRow][capturedPawnCol] = null;
+    }
 
     // Verifica se il re è in scacco dopo la mossa
     const isCheck = this.isKingInCheck(piece.color);
@@ -248,10 +301,31 @@ class ChessGame {
     // Se il re è in scacco, annulla la mossa
     if (isCheck) {
       this.board[fromRow][fromCol] = piece;
-      this.board[toRow][toCol] = captured;
+      if (isEnPassant) {
+        this.board[toRow][toCol] = null;
+        this.board[capturedPawnRow][capturedPawnCol] = captured;
+      } else {
+        this.board[toRow][toCol] = captured;
+      }
       return false;
     }
+
+    // AGGIORNA EN PASSANT TARGET
+    if (piece.type === 'pawn' && Math.abs(toRow - fromRow) === 2) {
+      // Un pedone si è mosso di 2 caselle, imposta il target per en passant
+      const direction = piece.color === 'white' ? 1 : -1;
+      this.enPassantTarget = {
+        row: toRow + direction, // La casella dove l'avversario può muoversi per catturare
+        col: toCol
+      };
+    } else {
+      this.enPassantTarget = null; // Reset en passant se non è una mossa di pedone da 2
+    }
+
+    // Cambia turno
     this.currentPlayer = this.currentPlayer === 'white' ? 'black' : 'white';
+
+    // Aggiorna hasMoved per arrocco
     if (piece.type === 'king') {
       this.hasMoved[piece.color === 'white' ? 'whiteKing' : 'blackKing'] = true;
     }
@@ -261,6 +335,7 @@ class ChessGame {
       if (fromRow === 0 && fromCol === 0) this.hasMoved.blackRookLeft = true;
       if (fromRow === 0 && fromCol === 7) this.hasMoved.blackRookRight = true;
     }
+
     return true;
   }
 }
@@ -271,8 +346,7 @@ const ChessApp = () => {
   const [moveHistory, setMoveHistory] = useState([]);
   const [checkedKing, setCheckedKing] = useState(null);
   const [gameOver, setGameOver] = useState(false);
-  const [winner, setWinner] = useState(null); // 'white' | 'black'
-
+  const [winner, setWinner] = useState(null);
 
   const getPieceSymbol = (piece) => {
     if (!piece) return '';
@@ -298,20 +372,22 @@ const ChessApp = () => {
 
     return symbols[piece.color][piece.type] || '';
   };
-  function getAlgebraicNotation(piece, fromRow, fromCol, toRow, toCol, captured, check, checkmate, isCastling) {
+
+  function getAlgebraicNotation(piece, fromRow, fromCol, toRow, toCol, captured, check, checkmate, isCastling, isEnPassant) {
     if (isCastling) {
       return toCol === 6 ? 'O-O' : 'O-O-O';
     }
+
     const fromFile = String.fromCharCode(97 + fromCol);
     const toFile = String.fromCharCode(97 + toCol);
     const toRank = 8 - toRow;
 
-    const isCapture = captured ? 'x' : '';
+    const isCapture = captured || isEnPassant ? 'x' : '';
     const checkSymbol = checkmate ? '#' : check ? '+' : '';
 
-    // Pedone con cattura: es "exd5"
+    // Pedone
     if (piece.type === 'pawn') {
-      if (captured) {
+      if (isCapture) {
         return `${fromFile}x${toFile}${toRank}${checkSymbol}`;
       } else {
         return `${toFile}${toRank}${checkSymbol}`;
@@ -322,9 +398,9 @@ const ChessApp = () => {
     return `${getPieceSymbol(piece)}${isCapture}${toFile}${toRank}${checkSymbol}`;
   }
 
-
   const handleSquareClick = useCallback((row, col) => {
     if (gameOver) return;
+
     if (selectedSquare) {
       const [fromRow, fromCol] = selectedSquare;
 
@@ -334,21 +410,26 @@ const ChessApp = () => {
       }
 
       const newGame = new ChessGame();
-      newGame.board = game.board.map(row => [...row]);
+      newGame.board = game.board.map(row => row.map(cell => cell ? { ...cell } : null));
       newGame.currentPlayer = game.currentPlayer;
+      newGame.enPassantTarget = game.enPassantTarget ? { ...game.enPassantTarget } : null;
+      newGame.hasMoved = { ...game.hasMoved };
+
+      const movedPiece = game.getPieceAt(fromRow, fromCol);
+      const captured = game.getPieceAt(row, col);
+
+      // Controlla se è en passant prima di fare la mossa
+      const isEnPassant = movedPiece?.type === 'pawn' &&
+        Math.abs(col - fromCol) === 1 &&
+        !captured &&
+        game.enPassantTarget &&
+        row === game.enPassantTarget.row &&
+        col === game.enPassantTarget.col;
 
       if (newGame.makeMove(fromRow, fromCol, row, col)) {
-        const movedPiece = game.getPieceAt(fromRow, fromCol);
-        const captured = game.getPieceAt(row, col);
-
-        // Crea una copia temporanea per verificare scacco e scacco matto
-        const tempGame = new ChessGame();
-        tempGame.board = game.board.map(r => r.map(cell => (cell ? { ...cell } : null)));
-        tempGame.board[row][col] = movedPiece;
-        tempGame.board[fromRow][fromCol] = null;
-
-        const check = tempGame.isKingInCheck(game.currentPlayer === 'white' ? 'black' : 'white');
-        const checkmate = tempGame.isCheckmate(game.currentPlayer === 'white' ? 'black' : 'white');
+        // Controlla scacco e scacco matto
+        const check = newGame.isKingInCheck(newGame.currentPlayer);
+        const checkmate = newGame.isCheckmate(newGame.currentPlayer);
         const isCastling = movedPiece.type === 'king' && Math.abs(col - fromCol) === 2;
 
         const moveNotation = getAlgebraicNotation(
@@ -360,24 +441,25 @@ const ChessApp = () => {
           captured,
           check,
           checkmate,
-          isCastling
+          isCastling,
+          isEnPassant
         );
         setMoveHistory(prev => {
           const newHistory = [...prev];
           if (game.currentPlayer === 'white') {
             newHistory.push({ white: moveNotation, black: '' });
           } else {
-            const lastMove = newHistory.pop();
+            const lastMove = newHistory.pop() || { white: '', black: '' };
             newHistory.push({ ...lastMove, black: moveNotation });
           }
           return newHistory;
         });
-        setGame(newGame);
 
+        setGame(newGame);
         setCheckedKing(check);
 
-        //Controllo scacco matto
-        if (newGame.isCheckmate(newGame.currentPlayer)) {
+        // Controllo scacco matto
+        if (checkmate) {
           setGameOver(true);
           setWinner(game.currentPlayer); // Il giocatore precedente ha vinto
         }
@@ -392,7 +474,7 @@ const ChessApp = () => {
         setSelectedSquare([row, col]);
       }
     }
-  }, [game, selectedSquare]);
+  }, [game, selectedSquare, gameOver]);
 
   const resetGame = () => {
     setGame(new ChessGame());
