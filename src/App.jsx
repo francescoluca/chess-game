@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import * as Tone from 'tone';
 import './App.css';
 
 // Simulazione di una libreria di scacchi semplificata
@@ -338,6 +339,7 @@ class ChessGame {
 
     return true;
   }
+
 }
 
 const ChessApp = () => {
@@ -396,6 +398,16 @@ const ChessApp = () => {
 
     // Altri pezzi
     return `${getPieceSymbol(piece)}${isCapture}${toFile}${toRank}${checkSymbol}`;
+  }
+  function playNote() {
+    const synth = new Tone.PolySynth(Tone.Synth).toDestination();
+    const now = Tone.now();
+    synth.triggerAttack("D4", now);
+    synth.triggerAttack("F4", now + 0.5);
+    synth.triggerAttack("A4", now + 1);
+    synth.triggerAttack("C5", now + 1.5);
+    synth.triggerAttack("E5", now + 2);
+    synth.triggerRelease(["D4", "F4", "A4", "C5", "E5"], now + 4);
   }
 
   const handleSquareClick = useCallback((row, col) => {
@@ -569,6 +581,8 @@ const ChessApp = () => {
               )}
             </div>
           </div>
+          <h1>Simple HTML5 Tone.js Demo</h1>
+          <button onClick={playNote} className="reset-btn">Click me to play note!</button>
         </div>
       </div>
     </div>
