@@ -351,7 +351,7 @@ const ChessApp = () => {
   const [winner, setWinner] = useState(null);
 
   const getPieceSymbol = (piece) => {
-    if (!piece) return '';
+  if (!piece || !piece.type) return '';
 
     const symbols = {
       white: {
@@ -399,15 +399,49 @@ const ChessApp = () => {
     // Altri pezzi
     return `${getPieceSymbol(piece)}${isCapture}${toFile}${toRank}${checkSymbol}`;
   }
-  function playNote() {
+  function playNote(row,col,piece) {
+   /* Nota Italiana | Nota Inglese
+                DO | C
+                RE | D
+                MI | E
+                FA | F
+                SOL | G
+                LA | A
+                SI | B                    */
+
+  const notes = [
+    ['C#3', 'E4', 'G4', 'B4', 'D4', 'F4', 'A4', 'C#4'],      // riga 8 (0)
+    ['D3', 'E3', 'A3', 'C3', 'E3', 'G3', 'B#3', 'D3'],        // riga 7 (1)
+    ['E3', 'G3', 'C3', 'D3', 'F3', 'A#3', 'C5', 'E3'],        // riga 6 (2)
+    ['F3', 'A3', 'C3', 'F3', 'G#3', 'B3', 'D3', 'F3'],        // riga 5 (3)
+    ['G3', 'B3', 'D3', 'F#3', 'A#3', 'C3', 'E3', 'G3'],      // riga 4 (4)
+    ['A3', 'C3', 'E#3', 'G3', 'B3', 'D#3', 'F3', 'A3'],       // riga 3 (5)
+    ['B5', 'D#3', 'F3', 'A3', 'C3', 'E3', 'G#3', 'B3'],      // riga 2 (6)
+    ['C#3', 'E4', 'G4', 'B4', 'D4', 'F4', 'A4', 'B3']       // riga 1 (7)
+  ];
+
     const synth = new Tone.PolySynth(Tone.Synth).toDestination();
     const now = Tone.now();
-    synth.triggerAttack("D4", now);
-    synth.triggerAttack("F4", now + 0.5);
-    synth.triggerAttack("A4", now + 1);
-    synth.triggerAttack("C5", now + 1.5);
-    synth.triggerAttack("E5", now + 2);
-    synth.triggerRelease(["D4", "F4", "A4", "C5", "E5"], now + 4);
+    const note = notes[row][col];
+    synth.triggerAttack(note, now);
+    if (piece.type == "pawn") {
+      synth.triggerRelease([note], now + 0.25);
+    }
+    if (piece.type == "rook") {
+      synth.triggerRelease([note], now + 0.5);
+    }
+    if (piece.type == "knight") {
+      synth.triggerRelease([note], now + 0.03125);
+    }
+    if (piece.type == "bishop") {
+      synth.triggerRelease([note], now + 0.125);
+    }
+    if (piece.type == "queen") {
+      synth.triggerRelease([note], now + 0.0625);
+    }
+    if (piece.type == "king") {
+      synth.triggerRelease([note], now + 1);
+    }
   }
 
   const handleSquareClick = useCallback((row, col) => {
@@ -456,6 +490,7 @@ const ChessApp = () => {
           isCastling,
           isEnPassant
         );
+        playNote(row,col,game.getPieceAt(fromRow, fromCol));
         setMoveHistory(prev => {
           const newHistory = [...prev];
           if (game.currentPlayer === 'white') {
@@ -581,8 +616,6 @@ const ChessApp = () => {
               )}
             </div>
           </div>
-          <h1>Simple HTML5 Tone.js Demo</h1>
-          <button onClick={playNote} className="reset-btn">Click me to play note!</button>
         </div>
       </div>
     </div>
