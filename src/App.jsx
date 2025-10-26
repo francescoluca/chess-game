@@ -349,6 +349,9 @@ const ChessApp = () => {
   const [checkedKing, setCheckedKing] = useState(null);
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recorder, setRecorder] = useState(null);
+
 
   const getPieceSymbol = (piece) => {
   if (!piece || !piece.type) return '';
@@ -399,48 +402,70 @@ const ChessApp = () => {
     // Altri pezzi
     return `${getPieceSymbol(piece)}${isCapture}${toFile}${toRank}${checkSymbol}`;
   }
-  function playNote(row,col,piece) {
-   /* Nota Italiana | Nota Inglese
-                DO | C
-                RE | D
-                MI | E
-                FA | F
-                SOL | G
-                LA | A
-                SI | B                    */
+  const startRecording = async () => {
+    await Tone.start();
+    const rec = new Tone.Recorder();
+    Tone.getDestination().connect(rec);
+    rec.start();
+    setRecorder(rec);
+    setIsRecording(true);
+  };
 
-  const notes = [
-    ['C#3', 'E4', 'G4', 'B4', 'D4', 'F4', 'A4', 'C#4'],      // riga 8 (0)
-    ['D3', 'E3', 'A3', 'C3', 'E3', 'G3', 'B#3', 'D3'],        // riga 7 (1)
-    ['E3', 'G3', 'C3', 'D3', 'F3', 'A#3', 'C5', 'E3'],        // riga 6 (2)
-    ['F3', 'A3', 'C3', 'F3', 'G#3', 'B3', 'D3', 'F3'],        // riga 5 (3)
-    ['G3', 'B3', 'D3', 'F#3', 'A#3', 'C3', 'E3', 'G3'],      // riga 4 (4)
-    ['A3', 'C3', 'E#3', 'G3', 'B3', 'D#3', 'F3', 'A3'],       // riga 3 (5)
-    ['B5', 'D#3', 'F3', 'A3', 'C3', 'E3', 'G#3', 'B3'],      // riga 2 (6)
-    ['C#3', 'E4', 'G4', 'B4', 'D4', 'F4', 'A4', 'B3']       // riga 1 (7)
-  ];
+  const stopRecording = async () => {
+    if (recorder) {
+      const recording = await recorder.stop();
+      const url = URL.createObjectURL(recording);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `chess-game-${Date.now()}.webm`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setIsRecording(false);
+    }
+  };
+
+  function playNote(row, col, piece) {
+    /* Nota Italiana | Nota Inglese
+                 DO | C
+                 RE | D
+                 MI | E
+                 FA | F
+                 SOL | G
+                 LA | A
+                 SI | B                    */
+
+    const notes = [
+      ['C#3', 'E4', 'G4', 'B4', 'D4', 'F4', 'A4', 'C#4'],      // riga 8 (0)
+      ['D3', 'E3', 'A3', 'C3', 'E3', 'G3', 'B#3', 'D3'],        // riga 7 (1)
+      ['E3', 'G3', 'C3', 'D3', 'F3', 'A#3', 'C5', 'E3'],        // riga 6 (2)
+      ['F3', 'A3', 'C3', 'F3', 'G#3', 'B3', 'D3', 'F3'],        // riga 5 (3)
+      ['G3', 'B3', 'D3', 'F#3', 'A#3', 'C3', 'E3', 'G3'],      // riga 4 (4)
+      ['A3', 'C3', 'E#3', 'G3', 'B3', 'D#3', 'F3', 'A3'],       // riga 3 (5)
+      ['B5', 'D#3', 'F3', 'A3', 'C3', 'E3', 'G#3', 'B3'],      // riga 2 (6)
+      ['C#3', 'E4', 'G4', 'B4', 'D4', 'F4', 'A4', 'B3']       // riga 1 (7)
+    ];
 
     const synth = new Tone.PolySynth(Tone.Synth).toDestination();
     const now = Tone.now();
     const note = notes[row][col];
     synth.triggerAttack(note, now);
     if (piece.type == "pawn") {
-      synth.triggerRelease([note], now + 0.25);
-    }
-    if (piece.type == "rook") {
-      synth.triggerRelease([note], now + 0.5);
-    }
-    if (piece.type == "knight") {
-      synth.triggerRelease([note], now + 0.03125);
-    }
-    if (piece.type == "bishop") {
       synth.triggerRelease([note], now + 0.125);
     }
-    if (piece.type == "queen") {
+    if (piece.type == "rook") {
+      synth.triggerRelease([note], now + 0.25);
+    }
+    if (piece.type == "knight") {
+      synth.triggerRelease([note], now + 0.015625);
+    }
+    if (piece.type == "bishop") {
       synth.triggerRelease([note], now + 0.0625);
     }
+    if (piece.type == "queen") {
+      synth.triggerRelease([note], now + 0.03125);
+    }
     if (piece.type == "king") {
-      synth.triggerRelease([note], now + 1);
+      synth.triggerRelease([note], now + 0.5);
     }
   }
 
@@ -615,6 +640,18 @@ const ChessApp = () => {
                 </div>
               )}
             </div>
+          </div>
+          <div className="recording-controls">
+            {!isRecording ? (
+              <button onClick={startRecording} className="record-btn">
+                🎙️ Inizia Registrazione
+              </button>
+            ) : (
+              <button onClick={stopRecording} className="record-btn stop">
+                ⏹️ Ferma e Salva
+              </button>
+            )}
+            {isRecording && <span className="recording-indicator">● REC</span>}
           </div>
         </div>
       </div>
